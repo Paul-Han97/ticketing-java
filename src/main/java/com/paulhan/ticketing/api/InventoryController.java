@@ -43,4 +43,9 @@ public class InventoryController {
             @Valid @RequestBody ReservationRequest request) {
         return reservationService.reserve(request, idempotencyKey);
     }
+
+    @PostMapping("/reserve/finalize")
+    public ReservationResponse finalizeReserve(@RequestHeader("X-Idempotency-Key") String idempotencyKey) {
+        return reservationService.finalizeReservation(idempotencyKey);
+    }
 }

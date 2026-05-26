@@ -18,6 +18,7 @@ import com.paulhan.ticketing.model.Ticket;
 import com.paulhan.ticketing.repository.TicketRepository;
 
 import jakarta.transaction.Transactional;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Service
 public class ReservationService {
@@ -28,6 +29,7 @@ public class ReservationService {
     private final TicketRepository ticketRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     public ReservationService(
             TicketRepository ticketRepository,
@@ -36,6 +38,7 @@ public class ReservationService {
         this.ticketRepository = ticketRepository;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+        this.meterRegistry = io.micrometer.core.instrument.Metrics.globalRegistry;
     }
 
     @Transactional
@@ -143,5 +146,68 @@ public class ReservationService {
 
     private String reservationHoldKey(String token) {
         return "reservation:hold:" + token;
+    }
+
+    @Transactional
+    public ReservationResponse finalizeReservation(String idempotencyKey) {
+        String requestKey = idempotencyRequestKey(idempotencyKey);
+        String responseKey = idempotencyResponseKey(idempotencyKey);
+
+        String existingResponse = redisTemplate.opsForValue().get(responseKey);
+        if (existingResponse != null) {
+            try {
+                return objectMapper.readValue(existingResponse, ReservationResponse.class);
+            } catch (JsonProcessingException ex) {
+                // fall through to attempt finalize
+            }
+        }
+
+        String requestPayload = redisTemplate.opsForValue().get(requestKey);
+        if (requestPayload == null) {
+            throw new ReservationFailedException("Idempotency request record is missing");
+        }
+
+        String[] parts = requestPayload.split(":");
+        if (parts.length != 2) {
+            throw new ReservationFailedException("Invalid idempotency request payload");
+        }
+        String eventId = parts[0];
+        int qty;
+        try {
+            qty = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException ex) {
+            throw new ReservationFailedException("Invalid quantity in idempotency request payload");
+        }
+
+        String holdKey = reservationHoldKey(idempotencyKey);
+        String hold = redisTemplate.opsForValue().get(holdKey);
+        if (hold == null) {
+            throw new ReservationFailedException("Reservation hold missing or expired");
+        }
+
+        int updated = ticketRepository.decrementAvailableIfEnough(eventId, qty);
+        if (updated == 0) {
+            meterRegistry.counter("reservation.failed").increment();
+            throw new ReservationFailedException("Not enough inventory for event: " + eventId);
+        }
+
+        // successful finalize
+        redisTemplate.delete(holdKey);
+        ReservationResponse response = new ReservationResponse(
+                "COMPLETED",
+                eventId,
+                qty,
+                "Reservation finalized",
+                idempotencyKey);
+
+        try {
+            String serialized = objectMapper.writeValueAsString(response);
+            redisTemplate.opsForValue().set(responseKey, serialized, IDEMPOTENCY_TTL);
+        } catch (JsonProcessingException ex) {
+            throw new ReservationFailedException("Unable to serialize reservation response");
+        }
+
+        meterRegistry.counter("reservation.completed").increment();
+        return response;
     }
 }
