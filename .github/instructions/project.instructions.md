@@ -38,9 +38,14 @@
 - PostgreSQL 18.4
 - Redis 8.6.3
 
-### Kafka versions
+### Message Queue and Coordination versions
 
-- Kafka 4.1.2
+- Kafka 7.5.14 (via `confluentinc/cp-kafka:7.5.14`)
+- Zookeeper 7.5.14 (via `confluentinc/cp-zookeeper:7.5.14`)
+
+### Monitoring versions
+
+- Prometheus latest (via `prom/prometheus:latest`)
 
 ## Development Principles
 
