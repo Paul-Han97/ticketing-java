@@ -1,21 +1,23 @@
 package com.paulhan.ticketing.service;
 
+import java.time.Duration;
+
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paulhan.ticketing.api.dto.InventoryResponse;
 import com.paulhan.ticketing.api.dto.ReservationRequest;
 import com.paulhan.ticketing.api.dto.ReservationResponse;
-import com.paulhan.ticketing.model.Ticket;
-import com.paulhan.ticketing.repository.TicketRepository;
-import jakarta.transaction.Transactional;
-import java.time.Duration;
-import java.util.Optional;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Service;
 import com.paulhan.ticketing.exception.IdempotencyConflictException;
 import com.paulhan.ticketing.exception.InvalidReservationRequestException;
 import com.paulhan.ticketing.exception.ReservationFailedException;
 import com.paulhan.ticketing.exception.ReservationNotFoundException;
+import com.paulhan.ticketing.model.Ticket;
+import com.paulhan.ticketing.repository.TicketRepository;
+
+import jakarta.transaction.Transactional;
 
 @Service
 public class ReservationService {
