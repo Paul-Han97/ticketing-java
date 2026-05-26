@@ -29,6 +29,6 @@ public class ReservationExceptionHandler {
 
     @ExceptionHandler(ReservationFailedException.class)
     public ResponseEntity<String> handleFailed(ReservationFailedException ex) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ex.getMessage());
     }
 }
