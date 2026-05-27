@@ -2,6 +2,7 @@ package com.paulhan.ticketing.service;
 
 import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -30,15 +31,27 @@ public class ReservationService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
+    private final ReservationProducer reservationProducer;
 
+    @Autowired
     public ReservationService(
             TicketRepository ticketRepository,
             StringRedisTemplate redisTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReservationProducer reservationProducer) {
         this.ticketRepository = ticketRepository;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.meterRegistry = io.micrometer.core.instrument.Metrics.globalRegistry;
+        this.reservationProducer = reservationProducer;
+    }
+
+    // Backwards-compatible constructor used in unit tests
+    public ReservationService(
+            TicketRepository ticketRepository,
+            StringRedisTemplate redisTemplate,
+            ObjectMapper objectMapper) {
+        this(ticketRepository, redisTemplate, objectMapper, null);
     }
 
     @Transactional
@@ -95,6 +108,17 @@ public class ReservationService {
                 idempotencyKey);
 
         saveIdempotencyRecord(requestKey, responseKey, requestPayload, response);
+        // publish reservation intent to Kafka for asynchronous finalization
+        try {
+            if (reservationProducer != null) {
+                com.paulhan.ticketing.api.dto.ReservationMessage msg =
+                        new com.paulhan.ticketing.api.dto.ReservationMessage(idempotencyKey, request.getEventId(), request.getQuantity());
+                reservationProducer.sendReservation(msg);
+            }
+        } catch (Exception ex) {
+            // non-fatal: log and continue returning accepted to client
+            meterRegistry.counter("reservation.enqueue.failed").increment();
+        }
         return response;
     }
 
