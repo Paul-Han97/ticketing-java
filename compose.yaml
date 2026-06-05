@@ -47,6 +47,8 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     container_name: prometheus
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
