@@ -1,4 +1,4 @@
-package com.paulhan.ticketing.api;
+package com.paulhan.ticketing.controller;
 
 import com.paulhan.ticketing.api.dto.InventoryResponse;
 import com.paulhan.ticketing.api.dto.InventoryUpdateRequest;
